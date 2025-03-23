@@ -39,11 +39,26 @@ def interpolate_data(las_data, grid_data):
 
 
 def filtered_dataset(las_data, fk):
+    # Создаем новый заголовок
     xk, yk, zk = las_data.x, las_data.y, las_data.z
     filtered_zk = zk - fk
 
     filtered_las = las_data #laspy.create(point_format=las_data.header.point_format)
-    filtered_las.header = las_data.header
+    filtered_las.header = laspy.header.LasHeader()
+    print('header:', las_data.header)
+    #filtered_las.header = las_data.header
+    #header = las_data.header
+    # Получаем масштаб и смещение
+    #scale = header.scale
+    #offset = header.offset
+    
+    # Получаем информацию о типах данных
+    #point_format = header.point_format
+    #print(f"Scale: {scale}")
+    #print(f"Offset: {offset}")
+    #print(f"Point format: {point_format}")
+
+
     filtered_las.x = xk
     filtered_las.y = yk
     filtered_las.z = filtered_zk

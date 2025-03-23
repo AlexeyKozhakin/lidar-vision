@@ -45,16 +45,21 @@ def load_las_to_numpy(file_path, num_points_lim=4096):
         las = laspy.read(file_path)
 
         # Находим максимальное значение среди всех цветовых каналов
-        max_color_value = np.max([np.max(las.red), np.max(las.green), np.max(las.blue)])
+        max_color_value = np.max([(np.max(las.red-np.min(las.red))), 
+                                  np.max(las.green - np.min(las.green)), 
+                                  np.max(las.blue - np.min(las.blue))])
+        min_color_value = np.min([np.min(las.red), np.min(las.green), np.min(las.blue)])
+        print('max_colour channel =', max_color_value)
+        print('min_colour channel =', min_color_value)
 
         # Извлечение координат и цветовых данных
         points = np.vstack((
             las.x - np.min(las.x),                 # Нормировка X
             las.y - np.min(las.y),                 # Нормировка Y
             las.z - np.min(las.z),                 # Нормировка Z
-            las.red / max_color_value * 256,       # Нормировка цвета (R)
-            las.green / max_color_value * 256,     # Нормировка цвета (G)
-            las.blue / max_color_value * 256       # Нормировка цвета (B)
+            (las.red - np.min(las.red)) / max_color_value * 256,       # Нормировка цвета (R)
+            (las.green - np.min(las.green))/ max_color_value * 256,     # Нормировка цвета (G)
+            (las.blue - np.min(las.blue))/ max_color_value * 256       # Нормировка цвета (B)
         )).T  # Размерность (N, 6)
 
         # Извлечение классов
@@ -118,7 +123,7 @@ def get_knn_data(data, M, K):
     knn_data = data[knn_indices]  # (M*M, K, D)
 
     # Преобразование к форме (M, M, 7, K)
-    knn_data = knn_data.reshape(M, M, K, D).transpose(0, 1, 3, 2)  # (M, M, 7, K)
+    knn_data = knn_data.reshape(M, M, K, D)#.transpose(0, 1, 3, 2)  # (M, M, D, K)
 
     return knn_data, grid
 
@@ -141,6 +146,21 @@ def fast_mode(array, axis=2):
     
     return mode_result.reshape(M, N)  # Возвращаем обратно в форму (M, M)
 
+def fast_median(array):
+    """
+    Вычисляет медиану по последней оси массива (M, M, K).
+    
+    :param array: Входной массив размерности (M, M, K).
+    :return: Массив (M, M) с медианными значениями.
+    """
+    M, N, K = array.shape  # Размерности входного массива
+    reshaped_array = array.reshape(-1, K)  # Преобразуем в (M*M, K)
+
+    # Вычисляем медиану по каждой строке
+    median_result = np.median(reshaped_array, axis=1)
+
+    return median_result.reshape(M, N)  # Преобразуем обратно в (M, M)
+
 
 def compute_features(data_knn, grid, feature_input_tensor, feature_output_tensor):
     """
@@ -155,10 +175,15 @@ def compute_features(data_knn, grid, feature_input_tensor, feature_output_tensor
     Возвращает:
     - data_result: numpy массив размерности (M, M, C), содержащий вычисленные признаки.
     """
-
+    print('shape:', data_knn.shape)
+    print('len feature:', len(feature_output_tensor))
     M, _, K, D = data_knn.shape
     C = len(feature_output_tensor)  # Число выходных каналов
+    print('D=',D)
     if D < len(feature_input_tensor):
+        print('D=',D)
+        print('len feature:', len(feature_output_tensor))
+        print('shape:', data_knn.shape)
         raise ValueError("Tensor dimensionality is smaller than specified in the configuration file.")
 
 
@@ -184,6 +209,13 @@ def compute_features(data_knn, grid, feature_input_tensor, feature_output_tensor
     # z_std: стандартное отклонение по оси K для z-координаты
     if "z_std" in feature_output_tensor:
         data_result[:, :, feature_output_tensor["z_std"]] = np.std(data_knn[:, :, :, idx_z], axis=2)
+
+    # z_std: стандартное отклонение по оси K для z-координаты
+    if "n_z" in feature_output_tensor:
+        std_x = np.std(data_knn[:, :, :, idx_x], axis=2)
+        std_y = np.std(data_knn[:, :, :, idx_y], axis=2)
+        std_z = np.std(data_knn[:, :, :, idx_z], axis=2)
+        data_result[:, :, feature_output_tensor["n_z"]] = std_z/(std_x**2+std_y**2+std_z**2)**(1/2)        
     
     # dist_mean: среднее расстояние от K соседей до центральной точки из grid
     if "dist_mean" in feature_output_tensor:
@@ -194,20 +226,33 @@ def compute_features(data_knn, grid, feature_input_tensor, feature_output_tensor
         data_result[:, :, feature_output_tensor["dist_mean"]] = np.mean(dist, axis=2)
     
     # r, g, b: мода значений среди K соседей (оптимизированный вариант)
-    if "r" in feature_output_tensor:
-        data_result[:, :, feature_output_tensor["r"]] = fast_mode(data_knn[:, :, :, idx_r])
-    if "g" in feature_output_tensor:
-        data_result[:, :, feature_output_tensor["g"]] = fast_mode(data_knn[:, :, :, idx_g])
-    if "b" in feature_output_tensor:
-        data_result[:, :, feature_output_tensor["b"]] = fast_mode(data_knn[:, :, :, idx_b])
+    # if "r" in feature_output_tensor:
+    #     data_result[:, :, feature_output_tensor["r"]] = fast_mode(data_knn[:, :, :, idx_r])
+    # if "g" in feature_output_tensor:
+    #     data_result[:, :, feature_output_tensor["g"]] = fast_mode(data_knn[:, :, :, idx_g])
+    # if "b" in feature_output_tensor:
+    #     data_result[:, :, feature_output_tensor["b"]] = fast_mode(data_knn[:, :, :, idx_b])
 
-    # class: мода среди K соседей
+    if "r" in feature_output_tensor:
+        data_result[:, :, feature_output_tensor["r"]] = np.mean(data_knn[:, :, :, idx_r], axis=-1)
+    if "g" in feature_output_tensor:
+        data_result[:, :, feature_output_tensor["g"]] = np.mean(data_knn[:, :, :, idx_g], axis=-1)
+    if "b" in feature_output_tensor:
+        data_result[:, :, feature_output_tensor["b"]] = np.mean(data_knn[:, :, :, idx_b], axis=-1)
+
+    # if "r" in feature_output_tensor:
+    #     data_result[:, :, feature_output_tensor["r"]] = fast_median(data_knn[:, :, :, idx_r])
+    # if "g" in feature_output_tensor:
+    #     data_result[:, :, feature_output_tensor["g"]] = fast_median(data_knn[:, :, :, idx_g])
+    # if "b" in feature_output_tensor:
+    #     data_result[:, :, feature_output_tensor["b"]] = fast_median(data_knn[:, :, :, idx_b])        
+
+    #class: мода среди K соседей
     if "class" in feature_output_tensor:
-        data_result[:, :, feature_output_tensor["class"]] = fast_mode(data_knn[:, :, :, idx_class])
+        data_result[:, :, feature_output_tensor["class"]] = fast_median(data_knn[:, :, :, idx_class])
+        print(data_knn[:, :, :, idx_class])
     
     return data_result
-
-
 
 
 def main_parallel_transform_to_tensor(input_directory, output_directory,
@@ -237,8 +282,10 @@ def main_parallel_transform_to_tensor(input_directory, output_directory,
 def process_transform(filename, input_directory, output_directory,
                       feature_input_tensor, feature_output_tensor, num_points_lim, M, K):
     input_file = os.path.join(input_directory, filename)
-    output_file = os.path.join(output_directory, filename)
+    name, _ = os.path.splitext(filename)
+    output_file = os.path.join(output_directory, name)
     data_org = load_las_to_numpy(input_file, num_points_lim=num_points_lim)
+
     data_knn, grid = get_knn_data(data_org, M, K)
     print(f'file {filename} is processing')
     data_result = compute_features(data_knn, grid, feature_input_tensor, feature_output_tensor)

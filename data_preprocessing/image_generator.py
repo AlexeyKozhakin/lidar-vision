@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 
-def visual_tensor(input_dir, filename, data, feature_output_tensor, channels_visualisation, output_dir):
+def visual_tensor(input_dir, filename, data, feature_input_tensor, feature_output_tensor, channels_visualisation, output_dir):
     """
     Функция для визуализации и сохранения выбранных каналов тензора как изображения.
 
@@ -31,11 +31,14 @@ def visual_tensor(input_dir, filename, data, feature_output_tensor, channels_vis
 
             # Нормализация канала
             channel_data_normalized = channel_data / np.max(channel_data, axis=(0, 1), keepdims=True)*255
+            #channel_data_normalized = channel_data
+            print(channel_data_normalized.max())
+            print(channel_data_normalized.min())
 
             # Ограничение значений в диапазоне от 0 до 255 и преобразование в целые числа
             channel_data_normalized = np.clip(channel_data_normalized, 0, 255).astype(np.uint8)
 
-            # Записываем данные в соответствующий канал изображения (например, r, g, или b)
+#            Записываем данные в соответствующий канал изображения (например, r, g, или b)
             # if channel_name == "r":
             #     image_data[:, :, 0] = channel_data_normalized  # Канал R
             # elif channel_name == "g":
@@ -43,13 +46,16 @@ def visual_tensor(input_dir, filename, data, feature_output_tensor, channels_vis
             # elif channel_name == "b":
             #     image_data[:, :, 2] = channel_data_normalized  # Канал B
 
-            # Записываем данные в соответствующий канал изображения (например, r, g, или b)
-            if channel_name == "z_mean":
-                image_data[:, :, 0] = channel_data_normalized  # Канал R
-            elif channel_name == "z_std":
-                image_data[:, :, 1] = channel_data_normalized  # Канал G
-            elif channel_name == "dist_mean":
-                image_data[:, :, 2] = channel_data_normalized  # Канал B
+            # if channel_name == "class":
+            #     image_data[:, :, 0] = channel_data_normalized  # Канал R
+            # elif channel_name == "class":
+            #     image_data[:, :, 1] = channel_data_normalized  # Канал G
+            # elif channel_name == "class":
+            #     image_data[:, :, 2] = channel_data_normalized  # Канал B                
+
+            #Записываем данные в соответствующий канал изображения (например, r, g, или b)
+            if channel_name == channel_name:
+                image_data[:, :, channels_visualisation[channel_name]] = channel_data_normalized  # Канал R
 
                 # Сохраняем изображение как PNG
     output_path = os.path.join(output_dir, f"{filename}_rgb.png")
@@ -68,14 +74,16 @@ if __name__ == "__main__":
     # Создаем выходную директорию, если ее нет
     os.makedirs(output_dir, exist_ok=True)
 
-    # Получаем список файлов .las
+    # Получаем список файлов .npy
     filenames = [f for f in os.listdir(input_dir) if f.endswith('.npy')]
     print(filenames)
     for filename in filenames:
         file_path = os.path.join(input_dir, filename)
         data = np.load(file_path)  # Загрузка
         # Вызов функции для визуализации
-        visual_tensor(input_dir, filename, data, cp.feature_output_tensor, cp.channels_visualisation, output_dir)
+        visual_tensor(input_dir, filename, data,
+                      cp.feature_input_tensor, 
+                      cp.feature_output_tensor, cp.channels_visualisation, output_dir)
     end = time.time()
     print(round((end-start)))
 

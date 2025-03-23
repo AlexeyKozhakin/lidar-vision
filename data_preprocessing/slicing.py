@@ -12,8 +12,8 @@ def process_file_cut_tiles(filename, input_directory, output_directory, tile_siz
     :param tile_size: Размер tile (в метрах)
     """
     input_file = os.path.join(input_directory, filename)
-
-    output_subdir = os.path.join(output_directory, '')
+    name, _ = os.path.splitext(filename)
+    output_subdir = os.path.join(output_directory, name)
     # Создаем подкаталог для текущего файла, если он не существует
     os.makedirs(output_subdir, exist_ok=True)
 
@@ -28,6 +28,7 @@ def process_file_cut_tiles(filename, input_directory, output_directory, tile_siz
     # Выполняем команду
     subprocess.run(command, check=True)
     print(f"[✔] {filename} успешно нарезан и сохранен в {output_subdir}")
+    os.rmdir(output_subdir)
 
 def main_parallel_cut_tiles(input_directory, output_directory, tile_size=64):
     """
